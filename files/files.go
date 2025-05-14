@@ -2,12 +2,13 @@ package files
 
 import (
 	"errors"
+	"github.com/panagiotisptr/cov-diff/interval"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"log"
+	"os"
 	"strings"
-
-	"github.com/panagiotisptr/cov-diff/interval"
 )
 
 var ErrLineNotFound error = errors.New("line not found")
@@ -52,7 +53,7 @@ func GetLineFromToken(
 	}
 }
 
-func GetIntervalsFromFile(
+func getIntervalsFromFile(
 	fileBytes []byte,
 	ignoreMain bool,
 ) ([]interval.Interval, error) {
@@ -101,4 +102,14 @@ func GetIntervalsFromFile(
 	}
 
 	return intervals, nil
+}
+
+func GetFuncIntervalsFromFilePath(filePath string, ignoreMain bool) ([]interval.Interval, error) {
+	fileBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// intervals which functions are in the file
+	return getIntervalsFromFile(fileBytes, ignoreMain)
 }

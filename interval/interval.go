@@ -47,6 +47,12 @@ func JoinAndSortIntervals(a []Interval) []Interval {
 	return joinSortedIntervals(a)
 }
 
+func SortIntervals(a []Interval) {
+	sort.Slice(a, func(i, j int) bool {
+		return a[i].Start < a[j].Start
+	})
+}
+
 func Union(a []Interval, b []Interval) []Interval {
 	if len(a) == 0 || len(b) == 0 {
 		return []Interval{}

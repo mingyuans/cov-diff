@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/panagiotisptr/cov-diff/interval"
 	"log"
 	"os"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"github.com/panagiotisptr/cov-diff/cov"
 	"github.com/panagiotisptr/cov-diff/diff"
 	"github.com/panagiotisptr/cov-diff/files"
-	"github.com/panagiotisptr/cov-diff/interval"
 )
 
 var path = flag.String("path", "", "path to the git repository")
@@ -59,82 +59,51 @@ func main() {
 		log.Fatal("missing coverage file")
 	}
 
-	diffBytes, err := os.ReadFile(*diffFile)
-	if err != nil {
-		log.Fatal("failed to read diff file: ", err)
-	}
-
-	diffIntervals, err := diff.GetFilesIntervalsFromDiff(diffBytes)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// de-allocate diffBytes
-	diffBytes = nil
-
-	covFileBytes, err := os.ReadFile(*coverageFile)
+	diffIntervals, err := diff.GetFilesIntervalsFromDiffFile(*diffFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	coverIntervals, allStatementIntervals, err := cov.GetFilesIntervalsFromCoverage(covFileBytes)
+	coverageBlocks, err := cov.GetFilesIntervalsFromCoverageFile(*coverageFile)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// de-allocate covFileBytes
-	covFileBytes = nil
 
-	total := 0
-	covered := 0
+	var totalCovBlocks, coveredBlocks int
 	for filename, di := range diffIntervals {
 		fmt.Printf("Processing file: %s\n", filename)
-		fileBytes, err := os.ReadFile(filepath.Join(*path, filename))
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		// intervals which functions are in the file
-		fi, err := files.GetIntervalsFromFile(fileBytes, *ignoreMain == "true")
-		if err != nil {
-			log.Fatal(err)
+		fi, getFuncIntervalsErr := files.GetFuncIntervalsFromFilePath(filepath.Join(*path, filename), *ignoreMain == "true")
+		if getFuncIntervalsErr != nil {
+			log.Fatal(getFuncIntervalsErr)
 		}
 
 		fullFilename := filepath.Join(*moduleName, filename)
 
 		// intervals that changed and are parts of the code we care about
 		measuredIntervals := interval.Union(di, fi)
-		si, ok := allStatementIntervals[fullFilename]
-		if !ok {
-			continue
-		}
-		measuredIntervals = interval.Union(measuredIntervals, si)
-		total += interval.Sum(measuredIntervals)
-		fmt.Printf("measured new lines - sum: %d\n", interval.Sum(measuredIntervals))
-		for _, i := range measuredIntervals {
-			fmt.Printf("new lines - interval: %d-%d, sum:%d\n", i.Start, i.End, interval.Sum([]interval.Interval{i}))
-		}
-
-		ci, ok := coverIntervals[fullFilename]
+		si, ok := coverageBlocks[fullFilename]
 		if !ok {
 			continue
 		}
 
-		coveredMeasuredIntervals := interval.Union(measuredIntervals, ci)
-		covered += interval.Sum(coveredMeasuredIntervals)
-		fmt.Printf("covered new lines - sum: %d\n", interval.Sum(coveredMeasuredIntervals))
-		for _, i := range coveredMeasuredIntervals {
-			fmt.Printf("new lines - interval: %d-%d\n", i.Start, i.End)
+		covBlocks := cov.FilterBlocksBySearchingRange(measuredIntervals, si)
+		fmt.Printf("Total coverage blocks: %d\n", len(covBlocks))
+		for _, cb := range covBlocks {
+			fmt.Printf("Block: %s, Start: %d, End: %d, Count: %d\n", cb.FileName, cb.Block.Start, cb.Block.End, cb.ExecutionCount)
 		}
 
-		diffMeasuredIntervals := interval.Diff(measuredIntervals, coveredMeasuredIntervals)
-		fmt.Printf("diff new lines - sum: %d\n", interval.Sum(diffMeasuredIntervals))
-		for _, i := range diffMeasuredIntervals {
-			fmt.Printf("new lines - interval: %d-%d\n", i.Start, i.End)
+		totalCovBlocks += len(covBlocks)
+
+		for _, cb := range covBlocks {
+			if cb.ExecutionCount > 0 {
+				coveredBlocks++
+			}
 		}
 	}
-
-	percentCoverage := 100
-	if total != 0 {
-		percentCoverage = (100 * covered) / total
+	var percentCoverage = 100
+	if totalCovBlocks > 0 {
+		percentCoverage = coveredBlocks * 100 / totalCovBlocks
 	}
 
 	fmt.Printf("Coverage on new lines: %d%%\n", percentCoverage)

@@ -1,6 +1,8 @@
 package diff
 
 import (
+	"errors"
+	"os"
 	"strings"
 
 	"github.com/panagiotisptr/cov-diff/files"
@@ -8,7 +10,7 @@ import (
 	godiff "github.com/sourcegraph/go-diff/diff"
 )
 
-func GetFilesIntervalsFromDiff(
+func getFilesIntervalsFromDiff(
 	diffBytes []byte,
 ) (interval.FilesIntervals, error) {
 	filesIntervals := interval.FilesIntervals{}
@@ -66,4 +68,19 @@ func GetFilesIntervalsFromDiff(
 	}
 
 	return filesIntervals, nil
+}
+
+func GetFilesIntervalsFromDiffFile(diffFilePath string) (interval.FilesIntervals, error) {
+	diffBytes, err := os.ReadFile(diffFilePath)
+	if err != nil {
+		return nil, errors.New("failed to read diff file: " + err.Error())
+	}
+
+	diffIntervals, err := getFilesIntervalsFromDiff(diffBytes)
+	if err != nil {
+		return nil, err
+	}
+	// de-allocate diffBytes
+	diffBytes = nil
+	return diffIntervals, nil
 }
