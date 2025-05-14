@@ -89,3 +89,53 @@ func Union(a []Interval, b []Interval) []Interval {
 
 	return joinSortedIntervals(result)
 }
+
+func Diff(a []Interval, b []Interval) []Interval {
+	if len(a) == 0 {
+		return []Interval{}
+	}
+	if len(b) == 0 {
+		return JoinAndSortIntervals(a)
+	}
+
+	a = JoinAndSortIntervals(a)
+	b = JoinAndSortIntervals(b)
+
+	result := []Interval{}
+	i, j := 0, 0
+
+	for i < len(a) {
+		// If we've gone through all intervals in b or current a is before all remaining b
+		if j >= len(b) || a[i].End < b[j].Start {
+			// Add the entire interval from a
+			result = append(result, a[i])
+			i++
+			continue
+		}
+
+		// If current a is after current b, move to next b
+		if a[i].Start > b[j].End {
+			j++
+			continue
+		}
+
+		// Handle the part before overlap (if any)
+		if a[i].Start < b[j].Start {
+			result = append(result, Interval{
+				Start: a[i].Start,
+				End:   b[j].Start - 1,
+			})
+		}
+
+		// Advance interval pointers based on which ends first
+		if a[i].End > b[j].End {
+			// Create new interval starting after current b
+			a[i].Start = b[j].End + 1
+			j++
+		} else {
+			i++
+		}
+	}
+
+	return joinSortedIntervals(result)
+}

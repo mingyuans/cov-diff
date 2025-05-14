@@ -76,7 +76,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	coverIntervals, err := cov.GetFilesIntervalsFromCoverage(covFileBytes)
+	coverIntervals, allStatementIntervals, err := cov.GetFilesIntervalsFromCoverage(covFileBytes)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,20 +86,33 @@ func main() {
 	total := 0
 	covered := 0
 	for filename, di := range diffIntervals {
+		fmt.Printf("Processing file: %s\n", filename)
 		fileBytes, err := os.ReadFile(filepath.Join(*path, filename))
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		// intervals which functions are in the file
 		fi, err := files.GetIntervalsFromFile(fileBytes, *ignoreMain == "true")
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		fullFilename := filepath.Join(*moduleName, filename)
+
 		// intervals that changed and are parts of the code we care about
 		measuredIntervals := interval.Union(di, fi)
+		si, ok := allStatementIntervals[fullFilename]
+		if !ok {
+			continue
+		}
+		measuredIntervals = interval.Union(measuredIntervals, si)
 		total += interval.Sum(measuredIntervals)
+		fmt.Printf("measured new lines - sum: %d\n", interval.Sum(measuredIntervals))
+		for _, i := range measuredIntervals {
+			fmt.Printf("new lines - interval: %d-%d, sum:%d\n", i.Start, i.End, interval.Sum([]interval.Interval{i}))
+		}
 
-		fullFilename := filepath.Join(*moduleName, filename)
 		ci, ok := coverIntervals[fullFilename]
 		if !ok {
 			continue
@@ -107,6 +120,16 @@ func main() {
 
 		coveredMeasuredIntervals := interval.Union(measuredIntervals, ci)
 		covered += interval.Sum(coveredMeasuredIntervals)
+		fmt.Printf("covered new lines - sum: %d\n", interval.Sum(coveredMeasuredIntervals))
+		for _, i := range coveredMeasuredIntervals {
+			fmt.Printf("new lines - interval: %d-%d\n", i.Start, i.End)
+		}
+
+		diffMeasuredIntervals := interval.Diff(measuredIntervals, coveredMeasuredIntervals)
+		fmt.Printf("diff new lines - sum: %d\n", interval.Sum(diffMeasuredIntervals))
+		for _, i := range diffMeasuredIntervals {
+			fmt.Printf("new lines - interval: %d-%d\n", i.Start, i.End)
+		}
 	}
 
 	percentCoverage := 100

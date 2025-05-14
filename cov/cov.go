@@ -8,14 +8,24 @@ import (
 	"golang.org/x/tools/cover"
 )
 
+// GetFilesIntervalsFromCoverage parses coverage data and extracts covered and uncovered intervals for files.
+//
+// Parameters:
+//   - covBytes: A byte slice containing the coverage data in a format compatible with `cover.ParseProfilesFromReader`.
+//
+// Returns:
+//   - coveredIntervals: A map where the keys are file names and the values are slices of intervals representing covered lines.
+//   - allStatementIntervals: A map where the keys are file names and the values are slices of intervals representing all statement lines.
+//   - error: An error if parsing the coverage data fails.
 func GetFilesIntervalsFromCoverage(
 	covBytes []byte,
-) (interval.FilesIntervals, error) {
-	filesIntervals := interval.FilesIntervals{}
+) (interval.FilesIntervals, interval.FilesIntervals, error) {
+	coveredIntervals := interval.FilesIntervals{}
+	allStatementIntervals := interval.FilesIntervals{}
 
 	cps, err := cover.ParseProfilesFromReader(bytes.NewReader(covBytes))
 	if err != nil {
-		return filesIntervals, err
+		return coveredIntervals, allStatementIntervals, err
 	}
 
 	for _, cp := range cps {
@@ -23,19 +33,30 @@ func GetFilesIntervalsFromCoverage(
 			continue
 		}
 
-		if _, ok := filesIntervals[cp.FileName]; !ok {
-			filesIntervals[cp.FileName] = []interval.Interval{}
+		if _, ok := coveredIntervals[cp.FileName]; !ok {
+			coveredIntervals[cp.FileName] = []interval.Interval{}
 		}
+
+		if _, ok := allStatementIntervals[cp.FileName]; !ok {
+			allStatementIntervals[cp.FileName] = []interval.Interval{}
+		}
+
 		for _, b := range cp.Blocks {
+			allStatementIntervals[cp.FileName] = append(allStatementIntervals[cp.FileName], interval.Interval{
+				Start: b.StartLine,
+				End:   b.EndLine,
+			})
+
 			if b.Count == 0 {
 				continue
 			}
-			filesIntervals[cp.FileName] = append(filesIntervals[cp.FileName], interval.Interval{
+
+			coveredIntervals[cp.FileName] = append(coveredIntervals[cp.FileName], interval.Interval{
 				Start: b.StartLine,
 				End:   b.EndLine,
 			})
 		}
 	}
 
-	return filesIntervals, nil
+	return coveredIntervals, allStatementIntervals, nil
 }
